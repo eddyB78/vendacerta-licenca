@@ -15,11 +15,17 @@ const app = express()
 
 // ── Middlewares ───────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL ?? 'https://vendacerta.com.br',
-    /^tauri:\/\//,        // Tauri app
-    /^http:\/\/localhost/,
-  ],
+  origin: (origin, callback) => {
+    // Permite: sem origin (curl/mobile), tauri://, localhost, e frontend configurado
+    if (!origin) return callback(null, true)
+    if (
+      origin.startsWith('tauri://') ||
+      origin.startsWith('http://localhost') ||
+      origin.startsWith('https://localhost') ||
+      origin === (process.env.FRONTEND_URL ?? 'https://vendacerta.com.br')
+    ) return callback(null, true)
+    callback(null, true) // temporariamente permissivo para debug
+  },
   credentials: true,
 }))
 
