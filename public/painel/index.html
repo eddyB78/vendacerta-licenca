@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — VendaCerta Licenças</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --green: #22c55e;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --radius: 12px;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    input, select, textarea { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 14px; width: 100%; outline: none; transition: border .15s; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    button { cursor: pointer; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 600; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-danger  { background: #7f1d1d; color: #fca5a5; }
+    .btn-danger:hover { background: #991b1b; }
+    .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+    .btn-success { background: #14532d; color: #86efac; }
+    .btn-success:hover { background: #166534; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+    .badge-green  { background: #14532d; color: #86efac; }
+    .badge-red    { background: #7f1d1d; color: #fca5a5; }
+    .badge-amber  { background: #78350f; color: #fcd34d; }
+    .badge-blue   { background: #1e3a5f; color: #93c5fd; }
+    .badge-gray   { background: var(--surface2); color: var(--muted); }
+
+    /* Layout */
+    #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    #login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 40px; width: 360px; }
+    #login-card h1 { font-size: 22px; margin-bottom: 6px; }
+    #login-card p  { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .error-msg { background: #7f1d1d33; color: #fca5a5; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; display: none; }
+
+    #app { display: none; }
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+    .topbar-logo { font-weight: 800; font-size: 16px; }
+    .topbar-logo span { color: var(--accent); }
+    .content { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+    .tab-btn { background: none; border: none; color: var(--muted); padding: 10px 18px; border-bottom: 2px solid transparent; border-radius: 0; font-size: 14px; font-weight: 500; transition: all .15s; cursor: pointer; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .stat-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .stat-value { font-size: 28px; font-weight: 800; }
+
+    /* Table */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .card-header { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+    .card-header h2 { font-size: 15px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 16px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .5px; }
+    td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+    .mono { font-family: 'Courier New', monospace; letter-spacing: 1px; }
+
+    /* Filtros */
+    .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .filters input, .filters select { max-width: 200px; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 460px; }
+    .modal h2 { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+
+    /* Actions */
+    .actions { display: flex; gap: 6px; }
+    .actions button { padding: 5px 10px; font-size: 12px; }
+
+    /* Toast */
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; font-size: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.4); z-index: 200; transform: translateY(100px); opacity: 0; transition: all .3s; max-width: 320px; }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { border-color: #22c55e44; color: #86efac; }
+    #toast.error   { border-color: #ef444444; color: #fca5a5; }
+
+    .empty-state { text-align: center; padding: 48px; color: var(--muted); }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .copy-btn { background: var(--surface2); color: var(--muted); padding: 2px 8px; font-size: 11px; margin-left: 6px; }
+    .copy-btn:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<!-- ── LOGIN ─────────────────────────────────────────────────────────────── -->
+<div id="login-screen">
+  <div id="login-card">
+    <h1>🛍 VendaCerta</h1>
+    <p>Painel de Gerenciamento de Licenças</p>
+    <div class="error-msg" id="login-error">Token inválido.</div>
+    <div class="form-group">
+      <label>Token de Acesso (ADMIN_TOKEN)</label>
+      <input type="password" id="token-input" placeholder="••••••••••••••••" autocomplete="off" />
+    </div>
+    <button class="btn-primary" style="width:100%" onclick="login()">Entrar</button>
+  </div>
+</div>
+
+<!-- ── APP ───────────────────────────────────────────────────────────────── -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo">🛍 Venda<span>Certa</span> — Admin</div>
+    <button class="btn-ghost" onclick="logout()">Sair</button>
+  </div>
+
+  <div class="content">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('dashboard')">Dashboard</button>
+      <button class="tab-btn" onclick="showTab('licencas')">Licenças</button>
+      <button class="tab-btn" onclick="showTab('gerar')">Gerar Chave</button>
+    </div>
+
+    <!-- ── TAB: DASHBOARD ─────────────────────────────────────────────── -->
+    <div class="tab-panel active" id="tab-dashboard">
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-label">Total de Licenças</div><div class="stat-value" id="stat-total">—</div></div>
+        <div class="stat-card"><div class="stat-label">Ativas</div><div class="stat-value" style="color:var(--green)" id="stat-ativas">—</div></div>
+        <div class="stat-card"><div class="stat-label">Pendentes</div><div class="stat-value" style="color:var(--amber)" id="stat-pendentes">—</div></div>
+        <div class="stat-card"><div class="stat-label">Revogadas</div><div class="stat-value" style="color:var(--red)" id="stat-revogadas">—</div></div>
+        <div class="stat-card"><div class="stat-label">Receita Total</div><div class="stat-value" style="color:var(--accent)" id="stat-receita">—</div></div>
+        <div class="stat-card"><div class="stat-label">Vendas (30d)</div><div class="stat-value" id="stat-vendas30">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Últimas Licenças</h2>
+          <button class="btn-ghost" style="font-size:12px" onclick="loadStats()">↻ Atualizar</button>
+        </div>
+        <div id="ultimas-licencas-table"></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: LICENÇAS ──────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-licencas">
+      <div class="filters">
+        <input id="filter-q" placeholder="Buscar chave, email, nome…" oninput="filtrarLicencas()" />
+        <select id="filter-status" onchange="filtrarLicencas()">
+          <option value="">Todos os status</option>
+          <option value="ativa">Ativa</option>
+          <option value="pendente">Pendente</option>
+          <option value="revogada">Revogada</option>
+        </select>
+        <select id="filter-plano" onchange="filtrarLicencas()">
+          <option value="">Todos os planos</option>
+          <option value="mensal">Mensal</option>
+          <option value="anual">Anual</option>
+          <option value="vitalicio">Vitalício</option>
+        </select>
+        <button class="btn-primary" onclick="loadLicencas()">Buscar</button>
+      </div>
+      <div class="card" id="licencas-card">
+        <div class="card-header">
+          <h2>Licenças</h2>
+          <span id="licencas-count" style="color:var(--muted);font-size:13px"></span>
+        </div>
+        <div id="licencas-table"><div class="empty-state"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: GERAR CHAVE ───────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-gerar">
+      <div class="card" style="max-width:480px">
+        <div class="card-header"><h2>Gerar Nova Chave de Licença</h2></div>
+        <div style="padding:24px">
+          <div class="form-group">
+            <label>Plano *</label>
+            <select id="g-plano">
+              <option value="mensal">Mensal (30 dias)</option>
+              <option value="anual">Anual (365 dias)</option>
+              <option value="vitalicio">Vitalício</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Nome do cliente</label>
+            <input id="g-nome" placeholder="João Silva" />
+          </div>
+          <div class="form-group">
+            <label>Email do cliente</label>
+            <input id="g-email" type="email" placeholder="joao@email.com" />
+          </div>
+          <div class="form-group">
+            <label>Enviar email com a chave?</label>
+            <select id="g-enviar-email">
+              <option value="true">Sim, enviar email</option>
+              <option value="false">Não</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Notas internas</label>
+            <textarea id="g-notas" rows="2" placeholder="Observações sobre esta licença…" style="resize:vertical"></textarea>
+          </div>
+          <button class="btn-primary" style="width:100%" onclick="gerarChave()">Gerar Chave</button>
+
+          <!-- Resultado -->
+          <div id="gerar-resultado" style="display:none;margin-top:20px;background:var(--surface2);border-radius:var(--radius);padding:20px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Chave gerada:</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="mono" id="chave-gerada" style="font-size:18px;color:var(--accent)"></span>
+              <button class="copy-btn" onclick="copiarChave()">Copiar</button>
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:10px" id="gerar-detalhes"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL DETALHES LICENÇA ─────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-licenca">
+  <div class="modal">
+    <h2>Detalhes da Licença</h2>
+    <div id="modal-content"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ─────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+  let TOKEN = ''
+  let API = window.location.origin
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  function login() {
+    const token = document.getElementById('token-input').value.trim()
+    if (!token) return
+    TOKEN = token
+    localStorage.setItem('admin_token', token)
+    checkLogin()
+  }
+
+  async function checkLogin() {
+    try {
+      const r = await apiFetch('/admin/stats')
+      if (r.ok) showApp()
+      else showLoginError()
+    } catch { showLoginError() }
+  }
+
+  function showLoginError() {
+    document.getElementById('login-error').style.display = 'block'
+    TOKEN = ''
+    localStorage.removeItem('admin_token')
+  }
+
+  function showApp() {
+    document.getElementById('login-screen').style.display = 'none'
+    document.getElementById('app').style.display = 'block'
+    loadStats()
+    loadLicencas()
+  }
+
+  function logout() {
+    TOKEN = ''
+    localStorage.removeItem('admin_token')
+    location.reload()
+  }
+
+  // ── API helper ───────────────────────────────────────────────────────────
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(API + path, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + TOKEN,
+        ...(opts.headers ?? {}),
+      },
+    })
+    return res.json()
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast')
+    t.textContent = msg
+    t.className = 'show ' + type
+    setTimeout(() => { t.className = '' }, 3500)
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  function showTab(name) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
+      const tabs = ['dashboard', 'licencas', 'gerar']
+      b.classList.toggle('active', tabs[i] === name)
+    })
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+    document.getElementById('tab-' + name).classList.add('active')
+  }
+
+  // ── Dashboard ─────────────────────────────────────────────────────────────
+  async function loadStats() {
+    const data = await apiFetch('/admin/stats')
+    if (!data.ok) return
+
+    const s = data.stats
+    document.getElementById('stat-total').textContent = s.total
+    document.getElementById('stat-ativas').textContent = s.ativas
+    document.getElementById('stat-pendentes').textContent = s.pendentes
+    document.getElementById('stat-revogadas').textContent = s.revogadas
+    document.getElementById('stat-receita').textContent = 'R$ ' + (s.receita_total_centavos / 100).toFixed(2).replace('.', ',')
+    document.getElementById('stat-vendas30').textContent = s.vendas_30d
+
+    const tbody = data.ultimasLicencas.map(l => `
+      <tr>
+        <td><span class="mono">${l.chave}</span><button class="copy-btn" onclick="copiar('${l.chave}')">Copiar</button></td>
+        <td>${badgePlano(l.plano)}</td>
+        <td>${badgeStatus(l.status)}</td>
+        <td style="color:var(--muted)">${l.email ?? '—'}</td>
+        <td style="color:var(--muted)">${fmtDate(l.criado_em)}</td>
+        <td><div class="actions">
+          <button class="btn-ghost" onclick="verLicenca('${l.id}')">Ver</button>
+          ${l.status !== 'revogada' ? `<button class="btn-danger" onclick="revogar('${l.id}','${l.chave}')">Revogar</button>` : `<button class="btn-success" onclick="reativar('${l.id}')">Reativar</button>`}
+        </div></td>
+      </tr>`).join('')
+
+    document.getElementById('ultimas-licencas-table').innerHTML = `
+      <table>
+        <thead><tr><th>Chave</th><th>Plano</th><th>Status</th><th>Email</th><th>Criada</th><th>Ações</th></tr></thead>
+        <tbody>${tbody || '<tr><td colspan=6 class="empty-state">Sem licenças</td></tr>'}</tbody>
+      </table>`
+  }
+
+  // ── Licenças ──────────────────────────────────────────────────────────────
+  let licencasData = []
+
+  async function loadLicencas() {
+    const q = document.getElementById('filter-q')?.value ?? ''
+    const status = document.getElementById('filter-status')?.value ?? ''
+    const plano = document.getElementById('filter-plano')?.value ?? ''
+
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    if (status) params.set('status', status)
+    if (plano) params.set('plano', plano)
+
+    const data = await apiFetch('/admin/licencas?' + params)
+    if (!data.ok) return
+
+    licencasData = data.licencas
+    renderLicencas()
+  }
+
+  function filtrarLicencas() {
+    clearTimeout(window._filterTimer)
+    window._filterTimer = setTimeout(loadLicencas, 400)
+  }
+
+  function renderLicencas() {
+    document.getElementById('licencas-count').textContent = licencasData.length + ' licenças'
+    if (!licencasData.length) {
+      document.getElementById('licencas-table').innerHTML = '<div class="empty-state">Nenhuma licença encontrada.</div>'
+      return
+    }
+    const rows = licencasData.map(l => `
+      <tr>
+        <td><span class="mono">${l.chave}</span><button class="copy-btn" onclick="copiar('${l.chave}')">Copiar</button></td>
+        <td>${badgePlano(l.plano)}</td>
+        <td>${badgeStatus(l.status)}</td>
+        <td style="color:var(--muted);font-size:12px">${l.nome ?? '—'}<br>${l.email ?? ''}</td>
+        <td style="color:var(--muted);font-size:12px">${l.expira_em ? fmtDate(l.expira_em) : '∞'}</td>
+        <td style="color:var(--muted);font-size:12px">${l.hardware_id ? '✓ Vinculado' : '— Livre'}</td>
+        <td><div class="actions">
+          <button class="btn-ghost" onclick="verLicenca('${l.id}')">Ver</button>
+          <button class="btn-ghost" onclick="resetarDispositivo('${l.id}')">Reset HW</button>
+          ${l.status !== 'revogada' ? `<button class="btn-danger" onclick="revogar('${l.id}','${l.chave}')">Revogar</button>` : `<button class="btn-success" onclick="reativar('${l.id}')">Reativar</button>`}
+        </div></td>
+      </tr>`).join('')
+
+    document.getElementById('licencas-table').innerHTML = `
+      <table>
+        <thead><tr><th>Chave</th><th>Plano</th><th>Status</th><th>Cliente</th><th>Expira</th><th>Dispositivo</th><th>Ações</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`
+  }
+
+  // ── Ações ─────────────────────────────────────────────────────────────────
+  async function verLicenca(id) {
+    const data = await apiFetch('/admin/licencas/' + id)
+    if (!data.ok) return
+
+    const l = data.licenca
+    const logs = data.logs
+
+    document.getElementById('modal-content').innerHTML = `
+      <div style="display:grid;gap:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="font-size:12px;color:var(--muted)">Chave</div>
+          <div class="mono" style="font-size:13px;color:var(--accent)">${l.chave}</div>
+          <div style="font-size:12px;color:var(--muted)">Plano</div>
+          <div>${badgePlano(l.plano)}</div>
+          <div style="font-size:12px;color:var(--muted)">Status</div>
+          <div>${badgeStatus(l.status)}</div>
+          <div style="font-size:12px;color:var(--muted)">Cliente</div>
+          <div style="font-size:13px">${l.nome ?? '—'}</div>
+          <div style="font-size:12px;color:var(--muted)">Email</div>
+          <div style="font-size:13px">${l.email ?? '—'}</div>
+          <div style="font-size:12px;color:var(--muted)">Expira em</div>
+          <div style="font-size:13px">${l.expira_em ? fmtDate(l.expira_em) : '♾ Vitalício'}</div>
+          <div style="font-size:12px;color:var(--muted)">Hardware ID</div>
+          <div style="font-size:11px;word-break:break-all;color:var(--muted)">${l.hardware_id ?? 'Não ativado'}</div>
+          <div style="font-size:12px;color:var(--muted)">Criada em</div>
+          <div style="font-size:13px">${fmtDate(l.criado_em)}</div>
+        </div>
+        ${logs.length ? `
+          <div style="border-top:1px solid var(--border);padding-top:12px">
+            <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">HISTÓRICO</div>
+            ${logs.slice(0, 8).map(lg => `
+              <div style="font-size:12px;display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+                <span style="color:${lg.tipo.includes('ok') ? 'var(--green)' : 'var(--red)'}">${lg.tipo}</span>
+                <span style="color:var(--muted)">${lg.ip ?? ''} · ${fmtDate(lg.criado_em)}</span>
+              </div>`).join('')}
+          </div>` : ''}
+      </div>`
+    document.getElementById('modal-licenca').classList.add('open')
+  }
+
+  function closeModal() {
+    document.getElementById('modal-licenca').classList.remove('open')
+  }
+
+  async function revogar(id, chave) {
+    if (!confirm(`Revogar a licença ${chave}? O cliente perderá acesso.`)) return
+    const motivo = prompt('Motivo (opcional):') ?? ''
+    const r = await apiFetch('/admin/licencas/' + id + '/revogar', { method: 'POST', body: JSON.stringify({ motivo }) })
+    if (r.ok) { showToast('Licença revogada.', 'success'); loadStats(); loadLicencas(); }
+    else showToast(r.erro ?? 'Erro', 'error')
+  }
+
+  async function reativar(id) {
+    if (!confirm('Reativar esta licença?')) return
+    const r = await apiFetch('/admin/licencas/' + id + '/reativar', { method: 'POST' })
+    if (r.ok) { showToast('Licença reativada.', 'success'); loadStats(); loadLicencas(); }
+    else showToast(r.erro ?? 'Erro', 'error')
+  }
+
+  async function resetarDispositivo(id) {
+    if (!confirm('Resetar o vínculo de dispositivo? O cliente poderá ativar em um novo PC.')) return
+    const r = await apiFetch('/admin/licencas/' + id + '/resetar-dispositivo', { method: 'POST' })
+    if (r.ok) { showToast('Dispositivo resetado. Licença livre para novo PC.', 'success'); loadLicencas(); }
+    else showToast(r.erro ?? 'Erro', 'error')
+  }
+
+  // ── Gerar chave ───────────────────────────────────────────────────────────
+  async function gerarChave() {
+    const plano = document.getElementById('g-plano').value
+    const nome = document.getElementById('g-nome').value.trim()
+    const email = document.getElementById('g-email').value.trim()
+    const notas = document.getElementById('g-notas').value.trim()
+    const enviarEmail = document.getElementById('g-enviar-email').value === 'true'
+
+    const r = await apiFetch('/admin/licencas', {
+      method: 'POST',
+      body: JSON.stringify({ plano, nome: nome || null, email: email || null, notas: notas || null, enviar_email: enviarEmail }),
+    })
+
+    if (r.ok) {
+      document.getElementById('chave-gerada').textContent = r.chave
+      document.getElementById('gerar-detalhes').textContent =
+        `Plano: ${r.plano} · Expira: ${r.expira_em ? fmtDate(r.expira_em) : 'Nunca'}`
+      document.getElementById('gerar-resultado').style.display = 'block'
+      if (enviarEmail && email) showToast(`Email enviado para ${email}!`, 'success')
+      else showToast('Chave gerada com sucesso!', 'success')
+      loadStats()
+      loadLicencas()
+    } else {
+      showToast(r.erro ?? 'Erro ao gerar chave', 'error')
+    }
+  }
+
+  function copiarChave() {
+    const chave = document.getElementById('chave-gerada').textContent
+    navigator.clipboard.writeText(chave).then(() => showToast('Copiado!', 'success'))
+  }
+
+  function copiar(text) {
+    navigator.clipboard.writeText(text).then(() => showToast('Copiado!', 'success'))
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function fmtDate(dt) {
+    if (!dt) return '—'
+    return new Date(dt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  function badgeStatus(s) {
+    const map = { ativa: 'green', pendente: 'amber', revogada: 'red', inativa: 'gray' }
+    return `<span class="badge badge-${map[s] ?? 'gray'}">${s}</span>`
+  }
+
+  function badgePlano(p) {
+    const map = { mensal: 'blue', anual: 'green', vitalicio: 'amber' }
+    return `<span class="badge badge-${map[p] ?? 'gray'}">${p}</span>`
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('token-input') === document.activeElement) login()
+    if (e.key === 'Escape') closeModal()
+  })
+  document.getElementById('modal-licenca').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal()
+  })
+
+  // Tenta auto-login com token salvo
+  const savedToken = localStorage.getItem('admin_token')
+  if (savedToken) {
+    TOKEN = savedToken
+    checkLogin()
+  }
+</script>
+</body>
+</html>
