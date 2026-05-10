@@ -1,16 +1,4 @@
-import nodemailer from 'nodemailer'
-
-function criarTransporte() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT ?? '587'),
-    secure: process.env.SMTP_PORT === '465',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  })
-}
+import { Resend } from 'resend'
 
 export async function enviarChaveLicenca(params: {
   email: string
@@ -20,6 +8,9 @@ export async function enviarChaveLicenca(params: {
   expiraEm: string | null
 }): Promise<void> {
   const { email, nome, chave, plano, expiraEm } = params
+
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) throw new Error('RESEND_API_KEY não configurada.')
 
   const nomePlano: Record<string, string> = {
     mensal: 'Mensal',
@@ -47,7 +38,6 @@ export async function enviarChaveLicenca(params: {
     .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
     .info-label { color: #94a3b8; font-size: 13px; }
     .info-value { color: #0f172a; font-size: 13px; font-weight: 600; }
-    .btn { display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-size: 14px; font-weight: 600; margin-top: 20px; }
     .footer { text-align: center; color: #94a3b8; font-size: 12px; margin-top: 32px; }
   </style>
 </head>
@@ -74,23 +64,20 @@ export async function enviarChaveLicenca(params: {
 
     <p style="margin-top: 20px;">Para ativar, abra o VendaCerta PDV e clique em <strong>Ativar Agora</strong>. Cole a chave acima e pronto!</p>
 
-    <a href="${process.env.FRONTEND_URL ?? 'https://vendacerta.com.br'}" class="btn">Acessar site</a>
-
     <div class="footer">
-      <p>Dúvidas? Responda este email ou acesse nosso suporte.<br/>
-      VendaCerta · ${process.env.SERVER_URL ?? 'vendacerta.com.br'}</p>
+      <p>Dúvidas? Entre em contato com o suporte.<br/>VendaCerta PDV</p>
     </div>
   </div>
 </body>
-</html>
-`
+</html>`
 
-  const transporte = criarTransporte()
-  await transporte.sendMail({
-    from: process.env.EMAIL_FROM ?? '"VendaCerta" <noreply@vendacerta.com.br>',
+  const resend = new Resend(apiKey)
+  const { error } = await resend.emails.send({
+    from: process.env.EMAIL_FROM ?? 'VendaCerta <onboarding@resend.dev>',
     to: email,
     subject: `Sua chave de licença VendaCerta PDV — ${nomePlano[plano] ?? plano}`,
     html,
-    text: `Olá ${nome},\n\nSua chave de licença VendaCerta PDV:\n\n${chave}\n\nPlano: ${nomePlano[plano]}\n${expiracao}\n\nPara ativar, abra o VendaCerta PDV e insira a chave acima.\n\nDúvidas? Contate ${process.env.SMTP_USER}`,
   })
+
+  if (error) throw new Error(error.message)
 }
