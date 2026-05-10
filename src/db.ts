@@ -1,50 +1,22 @@
-// Usa o SQLite nativo do Node.js 22+ (sem instalar nada!)
-// Docs: https://nodejs.org/api/sqlite.html
-import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { createClient, type Client } from '@libsql/client'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = process.env.DB_PATH
-  ? dirname(process.env.DB_PATH)
-  : join(__dirname, '..', 'data')
+let _db: Client | null = null
 
-export const DB_PATH = process.env.DB_PATH ?? join(DATA_DIR, 'licencas.db')
-
-let _db: DatabaseSync | null = null
-
-// Helpers que contornam os tipos estritos do node:sqlite
-export function dbRun(db: DatabaseSync, sql: string, ...params: unknown[]) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (db.prepare(sql) as any).run(...params)
-}
-export function dbAll(db: DatabaseSync, sql: string, ...params: unknown[]): unknown[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (db.prepare(sql) as any).all(...params)
-}
-export function dbGet(db: DatabaseSync, sql: string, ...params: unknown[]): unknown {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (db.prepare(sql) as any).get(...params)
-}
-
-export function getDb(): DatabaseSync {
+export function getDb(): Client {
   if (_db) return _db
 
-  // Cria a pasta /data se não existir
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true })
-  }
+  const url   = process.env.TURSO_URL
+  const token = process.env.TURSO_TOKEN
 
-  _db = new DatabaseSync(DB_PATH)
-  _db.exec('PRAGMA journal_mode = WAL')
-  _db.exec('PRAGMA foreign_keys = ON')
-  migrate(_db)
+  if (!url) throw new Error('TURSO_URL não configurada.')
+
+  _db = createClient({ url, authToken: token })
   return _db
 }
 
-function migrate(db: DatabaseSync): void {
-  db.exec(`
+export async function initDb(): Promise<void> {
+  const db = getDb()
+  await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS licencas (
       id            TEXT PRIMARY KEY,
       chave         TEXT UNIQUE NOT NULL,
@@ -67,7 +39,7 @@ function migrate(db: DatabaseSync): void {
 
     CREATE TABLE IF NOT EXISTS logs_ativacao (
       id          TEXT PRIMARY KEY,
-      licenca_id  TEXT NOT NULL REFERENCES licencas(id),
+      licenca_id  TEXT NOT NULL,
       tipo        TEXT NOT NULL,
       hardware_id TEXT,
       ip          TEXT,
@@ -77,7 +49,7 @@ function migrate(db: DatabaseSync): void {
 
     CREATE TABLE IF NOT EXISTS pagamentos (
       id              TEXT PRIMARY KEY,
-      licenca_id      TEXT REFERENCES licencas(id),
+      licenca_id      TEXT,
       mp_pagamento_id TEXT UNIQUE,
       plano           TEXT NOT NULL,
       valor_centavos  INTEGER NOT NULL,
@@ -90,4 +62,19 @@ function migrate(db: DatabaseSync): void {
 
     CREATE INDEX IF NOT EXISTS idx_pagamentos_mp ON pagamentos(mp_pagamento_id);
   `)
+}
+
+// Helpers com tipos flexíveis
+export async function dbRun(db: Client, sql: string, ...params: unknown[]) {
+  return db.execute({ sql, args: params as never[] })
+}
+
+export async function dbAll(db: Client, sql: string, ...params: unknown[]) {
+  const result = await db.execute({ sql, args: params as never[] })
+  return result.rows
+}
+
+export async function dbGet(db: Client, sql: string, ...params: unknown[]) {
+  const result = await db.execute({ sql, args: params as never[] })
+  return result.rows[0] ?? null
 }

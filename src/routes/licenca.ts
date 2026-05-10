@@ -20,10 +20,10 @@ router.post('/ativar', async (req: Request, res: Response) => {
     }
 
     const db = getDb()
-    const licenca = dbGet(db, 'SELECT * FROM licencas WHERE chave = ?', chave) as {
+    const licenca = await dbGet(db, 'SELECT * FROM licencas WHERE chave = ?', chave) as {
       id: string; chave: string; plano: string; status: string
       hardware_id: string | null; expira_em: string | null
-    } | undefined
+    } | null
 
     if (!licenca) {
       res.status(404).json({ ok: false, erro: 'Chave não encontrada.' }); return
@@ -32,26 +32,29 @@ router.post('/ativar', async (req: Request, res: Response) => {
       res.status(403).json({ ok: false, erro: 'Esta chave foi revogada.' }); return
     }
     if (licenca.hardware_id && licenca.hardware_id !== hardware_id) {
-      dbRun(db,
+      await dbRun(db,
         `INSERT INTO logs_ativacao (id, licenca_id, tipo, hardware_id, ip, detalhes, criado_em)
          VALUES (?, ?, 'ativacao_bloqueada', ?, ?, ?, datetime('now'))`,
         uuidv4(), licenca.id, hardware_id, req.ip ?? '', 'Hardware ID diferente do registrado'
       )
-      res.status(403).json({ ok: false, erro: 'Chave já ativada em outro dispositivo. Entre em contato com o suporte.' }); return
+      res.status(403).json({ ok: false, erro: 'Chave já ativada em outro dispositivo.' }); return
     }
-    if (licenca.expira_em && new Date(licenca.expira_em) < new Date()) {
+    if (licenca.expira_em && new Date(String(licenca.expira_em)) < new Date()) {
       res.status(403).json({ ok: false, erro: 'Chave expirada. Renove sua licença.' }); return
     }
 
     if (!licenca.hardware_id) {
-      dbRun(db,
+      await dbRun(db,
         `UPDATE licencas SET hardware_id=?, status='ativa', ativado_em=datetime('now'), atualizado_em=datetime('now') WHERE id=?`,
         hardware_id, licenca.id
       )
     }
 
-    const token = await assinarToken({ chave: licenca.chave, plano: licenca.plano, hardware_id, expira_em: licenca.expira_em })
-    dbRun(db,
+    const token = await assinarToken({
+      chave: String(licenca.chave), plano: String(licenca.plano),
+      hardware_id, expira_em: licenca.expira_em ? String(licenca.expira_em) : null
+    })
+    await dbRun(db,
       `INSERT INTO logs_ativacao (id, licenca_id, tipo, hardware_id, ip, criado_em) VALUES (?, ?, 'ativacao_ok', ?, ?, datetime('now'))`,
       uuidv4(), licenca.id, hardware_id, req.ip ?? ''
     )
@@ -74,26 +77,29 @@ router.post('/verificar', async (req: Request, res: Response) => {
 
     let payload
     try { payload = await verificarToken(token) }
-    catch { res.status(401).json({ ok: false, erro: 'Token inválido ou expirado.' }); return }
+    catch { res.status(401).json({ ok: false, erro: 'Token inválido.' }); return }
 
     if (payload.hardware_id !== hardware_id || payload.chave !== chave) {
-      res.status(403).json({ ok: false, erro: 'Hardware ID ou chave não correspondem ao token.' }); return
+      res.status(403).json({ ok: false, erro: 'Dados não correspondem ao token.' }); return
     }
 
     const db = getDb()
-    const licenca = dbGet(db, 'SELECT * FROM licencas WHERE chave = ?', chave) as {
+    const licenca = await dbGet(db, 'SELECT * FROM licencas WHERE chave = ?', chave) as {
       id: string; chave: string; plano: string; status: string; expira_em: string | null
-    } | undefined
+    } | null
 
     if (!licenca || licenca.status === 'revogada') {
       res.status(403).json({ ok: false, erro: 'Licença revogada.' }); return
     }
-    if (licenca.expira_em && new Date(licenca.expira_em) < new Date()) {
+    if (licenca.expira_em && new Date(String(licenca.expira_em)) < new Date()) {
       res.status(403).json({ ok: false, erro: 'Licença expirada.' }); return
     }
 
-    const novoToken = await assinarToken({ chave: licenca.chave, plano: licenca.plano, hardware_id: hardware_id ?? '', expira_em: licenca.expira_em })
-    dbRun(db,
+    const novoToken = await assinarToken({
+      chave: String(licenca.chave), plano: String(licenca.plano),
+      hardware_id: hardware_id ?? '', expira_em: licenca.expira_em ? String(licenca.expira_em) : null
+    })
+    await dbRun(db,
       `INSERT INTO logs_ativacao (id, licenca_id, tipo, hardware_id, ip, criado_em) VALUES (?, ?, 'verificacao_ok', ?, ?, datetime('now'))`,
       uuidv4(), licenca.id, hardware_id ?? '', req.ip ?? ''
     )

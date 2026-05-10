@@ -3,7 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
-import { getDb } from './db.js'
+import { getDb, initDb } from './db.js'
 import licencaRoutes from './routes/licenca.js'
 import webhookRoutes from './routes/webhook.js'
 import adminRoutes from './routes/admin.js'
@@ -55,17 +55,18 @@ app.use((_req, res) => {
 })
 
 // ── Inicia servidor ───────────────────────────────────────────────────────────
-// Garante que o banco seja inicializado antes de aceitar conexões
-try {
-  getDb()
-  console.log('[DB] Banco de dados inicializado.')
-} catch (err) {
-  console.error('[DB] Erro ao inicializar banco:', err)
-  process.exit(1)
-}
+// Garante que o banco (Turso) seja inicializado antes de aceitar conexões
+;(async () => {
+  try {
+    await initDb()
+    console.log('[DB] Banco de dados Turso inicializado.')
+  } catch (err) {
+    console.error('[DB] Erro ao inicializar banco:', err)
+    process.exit(1)
+  }
 
-app.listen(PORT, () => {
-  console.log(`
+  app.listen(PORT, () => {
+    console.log(`
   ╔══════════════════════════════════════╗
   ║    VendaCerta — Servidor Licenças    ║
   ╠══════════════════════════════════════╣
@@ -74,6 +75,7 @@ app.listen(PORT, () => {
   ║  Env   → ${process.env.NODE_ENV ?? 'development'}               ║
   ╚══════════════════════════════════════╝
   `)
-})
+  })
+})()
 
 export default app

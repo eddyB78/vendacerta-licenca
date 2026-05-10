@@ -9,8 +9,7 @@ import { enviarChaveLicenca } from '../utils/email.js'
 const router = Router()
 router.use(adminAuth)
 
-// ── GET /admin/licencas ──────────────────────────────────────────────────────
-router.get('/licencas', (req: Request, res: Response) => {
+router.get('/licencas', async (req: Request, res: Response) => {
   const db = getDb()
   const status = typeof req.query.status === 'string' ? req.query.status : undefined
   const plano  = typeof req.query.plano  === 'string' ? req.query.plano  : undefined
@@ -18,34 +17,27 @@ router.get('/licencas', (req: Request, res: Response) => {
 
   let sql = 'SELECT * FROM licencas WHERE 1=1'
   const params: string[] = []
-
   if (status) { sql += ' AND status = ?'; params.push(status) }
   if (plano)  { sql += ' AND plano = ?';  params.push(plano) }
-  if (q) {
-    sql += ' AND (chave LIKE ? OR email LIKE ? OR nome LIKE ?)'
-    params.push(`%${q}%`, `%${q}%`, `%${q}%`)
-  }
+  if (q) { sql += ' AND (chave LIKE ? OR email LIKE ? OR nome LIKE ?)'; params.push(`%${q}%`, `%${q}%`, `%${q}%`) }
   sql += ' ORDER BY criado_em DESC LIMIT 200'
 
-  const licencas = dbAll(db, sql, ...params)
+  const licencas = await dbAll(db, sql, ...params)
   res.json({ ok: true, licencas })
 })
 
-// ── GET /admin/licencas/:id ──────────────────────────────────────────────────
-router.get('/licencas/:id', (req: Request, res: Response) => {
+router.get('/licencas/:id', async (req: Request, res: Response) => {
   const db = getDb()
-  const licenca = dbGet(db, 'SELECT * FROM licencas WHERE id = ?', req.params.id)
+  const licenca = await dbGet(db, 'SELECT * FROM licencas WHERE id = ?', req.params.id)
   if (!licenca) { res.status(404).json({ ok: false, erro: 'Licença não encontrada.' }); return }
-  const logs = dbAll(db, 'SELECT * FROM logs_ativacao WHERE licenca_id = ? ORDER BY criado_em DESC LIMIT 50', req.params.id)
+  const logs = await dbAll(db, 'SELECT * FROM logs_ativacao WHERE licenca_id = ? ORDER BY criado_em DESC LIMIT 50', req.params.id)
   res.json({ ok: true, licenca, logs })
 })
 
-// ── POST /admin/licencas ─────────────────────────────────────────────────────
 router.post('/licencas', async (req: Request, res: Response) => {
   const { plano, email, nome, notas, enviar_email } = req.body as {
     plano?: string; email?: string; nome?: string; notas?: string; enviar_email?: boolean
   }
-
   if (!plano || !['mensal', 'anual', 'vitalicio'].includes(plano)) {
     res.status(400).json({ ok: false, erro: 'Plano inválido.' }); return
   }
@@ -55,7 +47,7 @@ router.post('/licencas', async (req: Request, res: Response) => {
   const expiraEm = calcularExpiracao(plano)
   const id = uuidv4()
 
-  dbRun(db,
+  await dbRun(db,
     `INSERT INTO licencas (id, chave, plano, email, nome, status, expira_em, notas, criado_em, atualizado_em)
      VALUES (?, ?, ?, ?, ?, 'pendente', ?, ?, datetime('now'), datetime('now'))`,
     id, chave, plano, email ?? null, nome ?? null, expiraEm ?? null, notas ?? null
@@ -69,14 +61,13 @@ router.post('/licencas', async (req: Request, res: Response) => {
   res.json({ ok: true, id, chave, plano, expira_em: expiraEm })
 })
 
-// ── PATCH /admin/licencas/:id ────────────────────────────────────────────────
-router.patch('/licencas/:id', (req: Request, res: Response) => {
+router.patch('/licencas/:id', async (req: Request, res: Response) => {
   const db = getDb()
-  if (!dbGet(db, 'SELECT id FROM licencas WHERE id = ?', req.params.id)) {
+  if (!await dbGet(db, 'SELECT id FROM licencas WHERE id = ?', req.params.id)) {
     res.status(404).json({ ok: false, erro: 'Licença não encontrada.' }); return
   }
   const { notas, email, nome, expira_em } = req.body as Record<string, string | undefined>
-  dbRun(db,
+  await dbRun(db,
     `UPDATE licencas SET notas=COALESCE(?,notas), email=COALESCE(?,email), nome=COALESCE(?,nome),
      expira_em=COALESCE(?,expira_em), atualizado_em=datetime('now') WHERE id=?`,
     notas ?? null, email ?? null, nome ?? null, expira_em ?? null, req.params.id
@@ -84,45 +75,41 @@ router.patch('/licencas/:id', (req: Request, res: Response) => {
   res.json({ ok: true })
 })
 
-// ── POST /admin/licencas/:id/revogar ────────────────────────────────────────
-router.post('/licencas/:id/revogar', (req: Request, res: Response) => {
+router.post('/licencas/:id/revogar', async (req: Request, res: Response) => {
   const db = getDb()
-  if (!dbGet(db, 'SELECT id FROM licencas WHERE id = ?', req.params.id)) {
+  if (!await dbGet(db, 'SELECT id FROM licencas WHERE id = ?', req.params.id)) {
     res.status(404).json({ ok: false, erro: 'Licença não encontrada.' }); return
   }
   const { motivo } = req.body as { motivo?: string }
-  dbRun(db,
+  await dbRun(db,
     `UPDATE licencas SET status='revogada', notas=?, atualizado_em=datetime('now') WHERE id=?`,
     motivo ? `[REVOGADA] ${motivo}` : '[REVOGADA]', req.params.id
   )
   res.json({ ok: true })
 })
 
-// ── POST /admin/licencas/:id/reativar ───────────────────────────────────────
-router.post('/licencas/:id/reativar', (req: Request, res: Response) => {
+router.post('/licencas/:id/reativar', async (req: Request, res: Response) => {
   const db = getDb()
-  dbRun(db, `UPDATE licencas SET status='ativa', hardware_id=NULL, atualizado_em=datetime('now') WHERE id=?`, req.params.id)
+  await dbRun(db, `UPDATE licencas SET status='ativa', hardware_id=NULL, atualizado_em=datetime('now') WHERE id=?`, req.params.id)
   res.json({ ok: true })
 })
 
-// ── POST /admin/licencas/:id/resetar-dispositivo ────────────────────────────
-router.post('/licencas/:id/resetar-dispositivo', (req: Request, res: Response) => {
+router.post('/licencas/:id/resetar-dispositivo', async (req: Request, res: Response) => {
   const db = getDb()
-  dbRun(db, `UPDATE licencas SET hardware_id=NULL, atualizado_em=datetime('now') WHERE id=?`, req.params.id)
-  res.json({ ok: true, mensagem: 'Hardware ID removido. A licença pode ser ativada em novo dispositivo.' })
+  await dbRun(db, `UPDATE licencas SET hardware_id=NULL, atualizado_em=datetime('now') WHERE id=?`, req.params.id)
+  res.json({ ok: true, mensagem: 'Hardware ID removido.' })
 })
 
-// ── GET /admin/stats ─────────────────────────────────────────────────────────
-router.get('/stats', (_req: Request, res: Response) => {
+router.get('/stats', async (_req: Request, res: Response) => {
   const db = getDb()
-  const total     = (dbGet(db, "SELECT COUNT(*) as n FROM licencas") as { n: number }).n
-  const ativas    = (dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='ativa'") as { n: number }).n
-  const revogadas = (dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='revogada'") as { n: number }).n
-  const pendentes = (dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='pendente'") as { n: number }).n
-  const porPlano  = dbAll(db, "SELECT plano, COUNT(*) as n FROM licencas GROUP BY plano")
-  const receita   = (dbGet(db, "SELECT SUM(valor_centavos) as total FROM pagamentos WHERE status='aprovado'") as { total: number | null })
-  const vendas30d = (dbGet(db, `SELECT COUNT(*) as n FROM pagamentos WHERE status='aprovado' AND criado_em>=datetime('now','-30 days')`) as { n: number }).n
-  const ultimasLicencas = dbAll(db, 'SELECT * FROM licencas ORDER BY criado_em DESC LIMIT 10')
+  const total     = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas") as { n: number }).n
+  const ativas    = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='ativa'") as { n: number }).n
+  const revogadas = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='revogada'") as { n: number }).n
+  const pendentes = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='pendente'") as { n: number }).n
+  const porPlano  = await dbAll(db, "SELECT plano, COUNT(*) as n FROM licencas GROUP BY plano")
+  const receita   = await dbGet(db, "SELECT SUM(valor_centavos) as total FROM pagamentos WHERE status='aprovado'") as { total: number | null }
+  const vendas30d = (await dbGet(db, `SELECT COUNT(*) as n FROM pagamentos WHERE status='aprovado' AND criado_em>=datetime('now','-30 days')`) as { n: number }).n
+  const ultimasLicencas = await dbAll(db, 'SELECT * FROM licencas ORDER BY criado_em DESC LIMIT 10')
 
   res.json({
     ok: true,

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import type { Request, Response } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { MercadoPagoConfig, Payment, Preference } from 'mercadopago'
-import { getDb } from '../db.js'
+import { getDb, dbRun, dbGet } from '../db.js'
 import { gerarChave, calcularExpiracao } from '../utils/chave.js'
 import { enviarChaveLicenca } from '../utils/email.js'
 
@@ -87,7 +87,7 @@ router.post('/webhook/mercadopago', async (req: Request, res: Response) => {
     const db = getDb()
 
     // Evita processar o mesmo pagamento duas vezes
-    const existente = db.prepare('SELECT id FROM pagamentos WHERE mp_pagamento_id = ?').get(String(data.id))
+    const existente = await dbGet(db, 'SELECT id FROM pagamentos WHERE mp_pagamento_id = ?', String(data.id))
     if (existente) return
 
     const plano = (pagamento.metadata?.plano as string) ?? 'mensal'
@@ -105,16 +105,18 @@ router.post('/webhook/mercadopago', async (req: Request, res: Response) => {
     const pagamentoId = uuidv4()
 
     // Salva licença no banco
-    db.prepare(`
-      INSERT INTO licencas (id, chave, plano, email, nome, status, expira_em, criado_em, atualizado_em, mp_pagamento_id)
-      VALUES (?, ?, ?, ?, ?, 'pendente', ?, datetime('now'), datetime('now'), ?)
-    `).run(licencaId, chave, plano, emailPagador, nomePagador, expiraEm, String(data.id))
+    await dbRun(db,
+      `INSERT INTO licencas (id, chave, plano, email, nome, status, expira_em, criado_em, atualizado_em, mp_pagamento_id)
+       VALUES (?, ?, ?, ?, ?, 'pendente', ?, datetime('now'), datetime('now'), ?)`,
+      licencaId, chave, plano, emailPagador, nomePagador, expiraEm ?? null, String(data.id)
+    )
 
     // Salva registro do pagamento
-    db.prepare(`
-      INSERT INTO pagamentos (id, licenca_id, mp_pagamento_id, plano, valor_centavos, status, email_pagador, nome_pagador, criado_em, atualizado_em)
-      VALUES (?, ?, ?, ?, ?, 'aprovado', ?, ?, datetime('now'), datetime('now'))
-    `).run(pagamentoId, licencaId, String(data.id), plano, valorCentavos, emailPagador, nomePagador)
+    await dbRun(db,
+      `INSERT INTO pagamentos (id, licenca_id, mp_pagamento_id, plano, valor_centavos, status, email_pagador, nome_pagador, criado_em, atualizado_em)
+       VALUES (?, ?, ?, ?, ?, 'aprovado', ?, ?, datetime('now'), datetime('now'))`,
+      pagamentoId, licencaId, String(data.id), plano, valorCentavos, emailPagador, nomePagador
+    )
 
     console.log(`[Webhook] Pagamento aprovado — ${plano} — ${emailPagador} — chave: ${chave}`)
 
