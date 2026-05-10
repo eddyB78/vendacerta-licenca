@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import type { Request, Response } from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import { MercadoPagoConfig, Payment } from 'mercadopago'
+import { MercadoPagoConfig, Payment, Preference } from 'mercadopago'
 import { getDb } from '../db.js'
 import { gerarChave, calcularExpiracao } from '../utils/chave.js'
 import { enviarChaveLicenca } from '../utils/email.js'
@@ -28,9 +28,6 @@ router.get('/comprar', async (req: Request, res: Response) => {
     }
 
     const mp = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN ?? '' })
-
-    // Cria preferência de pagamento
-    const { default: Preference } = await import('mercadopago/dist/clients/preference/index.js')
     const preference = new Preference(mp)
 
     const pref = await preference.create({

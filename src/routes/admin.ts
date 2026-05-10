@@ -15,7 +15,7 @@ router.get('/licencas', (req: Request, res: Response) => {
   const { status, plano, q } = req.query as Record<string, string>
 
   let sql = 'SELECT * FROM licencas WHERE 1=1'
-  const params: unknown[] = []
+  const params: string[] = []
 
   if (status) { sql += ' AND status = ?'; params.push(status) }
   if (plano)  { sql += ' AND plano = ?';  params.push(plano) }
@@ -26,7 +26,8 @@ router.get('/licencas', (req: Request, res: Response) => {
 
   sql += ' ORDER BY criado_em DESC LIMIT 200'
 
-  const licencas = db.prepare(sql).all(...params)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const licencas = (db.prepare(sql).all as any)(...params)
   res.json({ ok: true, licencas })
 })
 
