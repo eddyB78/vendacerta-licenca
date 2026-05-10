@@ -14,6 +14,20 @@ export const DB_PATH = process.env.DB_PATH ?? join(DATA_DIR, 'licencas.db')
 
 let _db: DatabaseSync | null = null
 
+// Helpers que contornam os tipos estritos do node:sqlite
+export function dbRun(db: DatabaseSync, sql: string, ...params: unknown[]) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (db.prepare(sql) as any).run(...params)
+}
+export function dbAll(db: DatabaseSync, sql: string, ...params: unknown[]): unknown[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (db.prepare(sql) as any).all(...params)
+}
+export function dbGet(db: DatabaseSync, sql: string, ...params: unknown[]): unknown {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (db.prepare(sql) as any).get(...params)
+}
+
 export function getDb(): DatabaseSync {
   if (_db) return _db
 
