@@ -20,7 +20,7 @@ router.post('/ativar', async (req: Request, res: Response) => {
     }
 
     const db = getDb()
-    const licenca = await dbGet(db, 'SELECT * FROM licencas WHERE chave = ?', chave) as {
+    const licenca = await dbGet(db, 'SELECT * FROM licencas WHERE chave = ?', chave) as unknown as {
       id: string; chave: string; plano: string; status: string
       hardware_id: string | null; expira_em: string | null
     } | null
@@ -84,7 +84,7 @@ router.post('/verificar', async (req: Request, res: Response) => {
     }
 
     const db = getDb()
-    const licenca = await dbGet(db, 'SELECT * FROM licencas WHERE chave = ?', chave) as {
+    const licenca = await dbGet(db, 'SELECT * FROM licencas WHERE chave = ?', chave) as unknown as {
       id: string; chave: string; plano: string; status: string; expira_em: string | null
     } | null
 

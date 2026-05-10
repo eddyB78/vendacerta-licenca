@@ -102,13 +102,13 @@ router.post('/licencas/:id/resetar-dispositivo', async (req: Request, res: Respo
 
 router.get('/stats', async (_req: Request, res: Response) => {
   const db = getDb()
-  const total     = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas") as { n: number }).n
-  const ativas    = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='ativa'") as { n: number }).n
-  const revogadas = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='revogada'") as { n: number }).n
-  const pendentes = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='pendente'") as { n: number }).n
+  const total     = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas") as unknown as { n: number }).n
+  const ativas    = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='ativa'") as unknown as { n: number }).n
+  const revogadas = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='revogada'") as unknown as { n: number }).n
+  const pendentes = (await dbGet(db, "SELECT COUNT(*) as n FROM licencas WHERE status='pendente'") as unknown as { n: number }).n
   const porPlano  = await dbAll(db, "SELECT plano, COUNT(*) as n FROM licencas GROUP BY plano")
-  const receita   = await dbGet(db, "SELECT SUM(valor_centavos) as total FROM pagamentos WHERE status='aprovado'") as { total: number | null }
-  const vendas30d = (await dbGet(db, `SELECT COUNT(*) as n FROM pagamentos WHERE status='aprovado' AND criado_em>=datetime('now','-30 days')`) as { n: number }).n
+  const receita   = await dbGet(db, "SELECT SUM(valor_centavos) as total FROM pagamentos WHERE status='aprovado'") as unknown as { total: number | null }
+  const vendas30d = (await dbGet(db, `SELECT COUNT(*) as n FROM pagamentos WHERE status='aprovado' AND criado_em>=datetime('now','-30 days')`) as unknown as { n: number }).n
   const ultimasLicencas = await dbAll(db, 'SELECT * FROM licencas ORDER BY criado_em DESC LIMIT 10')
 
   res.json({
