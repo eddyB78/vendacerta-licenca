@@ -341,7 +341,10 @@
         <td style="color:var(--muted)">${fmtDate(l.criado_em)}</td>
         <td><div class="actions">
           <button class="btn-ghost" onclick="verLicenca('${l.id}')">Ver</button>
-          ${l.status !== 'revogada' ? `<button class="btn-danger" onclick="revogar('${l.id}','${l.chave}')">Revogar</button>` : `<button class="btn-success" onclick="reativar('${l.id}')">Reativar</button>`}
+          ${l.status !== 'revogada'
+            ? `<button class="btn-danger" onclick="revogar('${l.id}','${l.chave}')">Revogar</button>`
+            : `<button class="btn-success" onclick="reativar('${l.id}')">Reativar</button>
+               <button class="btn-danger" onclick="excluirLicenca('${l.id}','${l.chave}')">Excluir</button>`}
         </div></td>
       </tr>`).join('')
 
@@ -394,7 +397,10 @@
         <td><div class="actions">
           <button class="btn-ghost" onclick="verLicenca('${l.id}')">Ver</button>
           <button class="btn-ghost" onclick="resetarDispositivo('${l.id}')">Reset HW</button>
-          ${l.status !== 'revogada' ? `<button class="btn-danger" onclick="revogar('${l.id}','${l.chave}')">Revogar</button>` : `<button class="btn-success" onclick="reativar('${l.id}')">Reativar</button>`}
+          ${l.status !== 'revogada'
+            ? `<button class="btn-danger" onclick="revogar('${l.id}','${l.chave}')">Revogar</button>`
+            : `<button class="btn-success" onclick="reativar('${l.id}')">Reativar</button>
+               <button class="btn-danger" onclick="excluirLicenca('${l.id}','${l.chave}')">Excluir</button>`}
         </div></td>
       </tr>`).join('')
 
@@ -463,6 +469,25 @@
     const r = await apiFetch('/admin/licencas/' + id + '/reativar', { method: 'POST' })
     if (r.ok) { showToast('Licença reativada.', 'success'); loadStats(); loadLicencas(); }
     else showToast(r.erro ?? 'Erro', 'error')
+  }
+
+  async function excluirLicenca(id, chave) {
+    const confirmacao = prompt(
+      `A licença ${chave} será excluída definitivamente.\n\nDigite EXCLUIR para confirmar:`
+    )
+    if (confirmacao !== 'EXCLUIR') {
+      if (confirmacao !== null) showToast('Exclusão cancelada: confirmação incorreta.', 'error')
+      return
+    }
+
+    const r = await apiFetch('/admin/licencas/' + id, { method: 'DELETE' })
+    if (r.ok) {
+      showToast('Licença revogada excluída.', 'success')
+      loadStats()
+      loadLicencas()
+    } else {
+      showToast(r.erro ?? 'Não foi possível excluir a licença.', 'error')
+    }
   }
 
   async function resetarDispositivo(id) {

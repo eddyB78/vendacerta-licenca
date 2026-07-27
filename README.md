@@ -59,6 +59,7 @@ npm run dev
 | PATCH | `/admin/licencas/:id` | Atualiza campos da licença |
 | POST | `/admin/licencas/:id/revogar` | Revoga licença |
 | POST | `/admin/licencas/:id/reativar` | Reativa licença revogada |
+| DELETE | `/admin/licencas/:id` | Exclui definitivamente uma licença revogada |
 | POST | `/admin/licencas/:id/resetar-dispositivo` | Remove hardware_id vinculado |
 
 ### Painel admin web

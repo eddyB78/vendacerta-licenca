@@ -94,6 +94,35 @@ router.post('/licencas/:id/reativar', async (req: Request, res: Response) => {
   res.json({ ok: true })
 })
 
+router.delete('/licencas/:id', async (req: Request, res: Response) => {
+  const db = getDb()
+  const id = String(req.params.id)
+  const licenca = await dbGet(
+    db,
+    'SELECT id, status FROM licencas WHERE id = ?',
+    id
+  ) as unknown as { id: string; status: string } | null
+
+  if (!licenca) {
+    res.status(404).json({ ok: false, erro: 'Licença não encontrada.' }); return
+  }
+  if (licenca.status !== 'revogada') {
+    res.status(409).json({
+      ok: false,
+      erro: 'Somente licenças revogadas podem ser excluídas.',
+    }); return
+  }
+
+  // Preserva o histórico financeiro, mas remove dados e logs da licença.
+  await db.batch([
+    { sql: 'UPDATE pagamentos SET licenca_id = NULL WHERE licenca_id = ?', args: [id] },
+    { sql: 'DELETE FROM logs_ativacao WHERE licenca_id = ?', args: [id] },
+    { sql: "DELETE FROM licencas WHERE id = ? AND status = 'revogada'", args: [id] },
+  ], 'write')
+
+  res.json({ ok: true, mensagem: 'Licença revogada excluída.' })
+})
+
 router.post('/licencas/:id/resetar-dispositivo', async (req: Request, res: Response) => {
   const db = getDb()
   await dbRun(db, `UPDATE licencas SET hardware_id=NULL, atualizado_em=datetime('now') WHERE id=?`, req.params.id)
