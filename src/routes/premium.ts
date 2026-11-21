@@ -99,7 +99,14 @@ router.put('/modulos/:id', rota(async (req, res) => {
 router.get('/clientes', rota(async (_req, res) => {
   const clientes = await dbAll(getDb(), `SELECT c.*, l.email AS email_licenca
     FROM clientes_premium c LEFT JOIN licencas l ON l.id=c.licenca_id ORDER BY c.nome, c.id`)
-  res.json({ ok: true, clientes })
+  const licencas_disponiveis = await dbAll(getDb(), `
+    SELECT l.id, l.nome, l.email
+    FROM licencas l
+    WHERE l.status = 'ativa' AND (l.expira_em IS NULL OR julianday(l.expira_em) > julianday('now'))
+      AND NOT EXISTS (SELECT 1 FROM clientes_premium c WHERE c.licenca_id=l.id)
+    ORDER BY l.nome, l.email, l.id
+  `)
+  res.json({ ok: true, clientes, licencas_disponiveis })
 }))
 
 router.post('/clientes', rota(async (req, res) => {
@@ -140,7 +147,9 @@ router.get('/direitos/:id/auditoria', rota(async (req, res) => {
 }))
 
 router.post('/direitos', rota(async (req, res) => {
-  const cliente = texto(req.body?.cliente_id, 'Cliente', 80)
+  const cliente = req.body?.cliente_id == null ? null : texto(req.body.cliente_id, 'Cliente', 80)
+  const licenca = req.body?.licenca_id == null ? null : texto(req.body.licenca_id, 'Licença', 80)
+  if (Boolean(cliente) === Boolean(licenca)) throw new Erro(400, 'Selecione um cliente ou uma licença.')
   const modulo = texto(req.body?.modulo_id, 'Módulo', 64)
   const modelo = texto(req.body?.modelo, 'Modelo comercial', 20)
   if (!modelos.includes(modelo)) throw new Erro(400, 'Modelo comercial inválido.')
@@ -150,21 +159,39 @@ router.post('/direitos', rota(async (req, res) => {
   const inicio = agora.toISOString()
   const expira = vencimento(modelo, agora)
 
-  const [resultado] = await getDb().batch([
+  const vinculo = licenca ? [{
+    sql: `INSERT INTO clientes_premium (id, nome, email, licenca_id)
+          SELECT ?, COALESCE(NULLIF(TRIM(l.nome), ''), NULLIF(TRIM(l.email), ''), 'Licença ' || l.id),
+                 COALESCE(l.email, ''), l.id
+          FROM licencas l
+          WHERE l.id=? AND l.status='ativa'
+            AND (l.expira_em IS NULL OR julianday(l.expira_em) > julianday('now'))
+            AND EXISTS (SELECT 1 FROM ofertas_premium o JOIN modulos_premium m ON m.id=o.modulo_id
+                        WHERE o.modulo_id=? AND o.modelo=? AND o.disponivel=1 AND m.ativo=1)
+          ON CONFLICT(licenca_id) DO NOTHING`,
+    args: [randomUUID(), licenca, modulo, modelo],
+  }] : []
+
+  const resultados = await getDb().batch([
+    ...vinculo,
     {
       sql: `INSERT INTO direitos_premium
             (id, cliente_id, modulo_id, modelo, status, inicio_em, expira_em, preco_centavos, moeda)
-            SELECT ?, ?, o.modulo_id, o.modelo, 'ativo', ?, ?, o.preco_centavos, o.moeda
+            SELECT ?, c.id, o.modulo_id, o.modelo, 'ativo', ?, ?, o.preco_centavos, o.moeda
             FROM ofertas_premium o JOIN modulos_premium m ON m.id=o.modulo_id
+            JOIN clientes_premium c ON (c.id=? OR c.licenca_id=?)
             WHERE o.modulo_id=? AND o.modelo=? AND o.disponivel=1 AND m.ativo=1
-              AND EXISTS (SELECT 1 FROM clientes_premium WHERE id=?)
+              AND (? IS NULL OR EXISTS (
+                SELECT 1 FROM licencas l WHERE l.id=? AND l.status='ativa'
+                  AND (l.expira_em IS NULL OR julianday(l.expira_em) > julianday('now'))
+              ))
             ON CONFLICT(cliente_id, modulo_id) WHERE status <> 'revogado' DO NOTHING`,
-      args: [id, cliente, inicio, expira, modulo, modelo, cliente],
+      args: [id, inicio, expira, cliente, licenca, modulo, modelo, licenca, licenca],
     },
     evento(id, 'concessao', motivo, inicio, 0),
   ], 'write')
 
-  if (!resultado.rowsAffected) {
+  if (!resultados[vinculo.length].rowsAffected) {
     throw new Erro(409, 'Verifique cliente, disponibilidade da oferta e se já existe um direito para este módulo.')
   }
   res.status(201).json({ ok: true, id })
