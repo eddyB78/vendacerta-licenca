@@ -6,8 +6,11 @@ import { gerarChave, calcularExpiracao } from '../utils/chave.js'
 import { adminAuth } from '../middleware/adminAuth.js'
 import { enviarChaveLicenca } from '../utils/email.js'
 
+import premiumRoutes from './premium.js'
+
 const router = Router()
 router.use(adminAuth)
+router.use('/premium', premiumRoutes)
 
 router.get('/licencas', async (req: Request, res: Response) => {
   const db = getDb()

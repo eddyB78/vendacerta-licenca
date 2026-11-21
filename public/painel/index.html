@@ -106,6 +106,12 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .copy-btn { background: var(--surface2); color: var(--muted); padding: 2px 8px; font-size: 11px; margin-left: 6px; }
     .copy-btn:hover { color: var(--text); }
+    #tab-premium .form-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: start; }
+    #tab-premium .form-row > .form-group { flex: 1 1 170px; }
+    #tab-premium .form-row > input { flex: 1 1 170px; }
+    #premium-historico:not(:empty) { margin-top: 16px; }
+    #premium-historico ul { padding-left: 22px; }
+    .tabs { flex-wrap: wrap; }
   </style>
 </head>
 <body>
@@ -136,6 +142,7 @@
       <button class="tab-btn active" onclick="showTab('dashboard')">Dashboard</button>
       <button class="tab-btn" onclick="showTab('licencas')">Licenças</button>
       <button class="tab-btn" onclick="showTab('gerar')">Gerar Chave</button>
+      <button class="tab-btn" onclick="showTab('premium')">Módulos Premium</button>
     </div>
 
     <!-- ── TAB: DASHBOARD ─────────────────────────────────────────────── -->
@@ -231,6 +238,59 @@
         </div>
       </div>
     </div>
+    <section class="tab-panel" id="tab-premium">
+      <div class="card">
+        <div class="card-header"><h2>Catálogo de módulos</h2></div>
+        <form id="premium-modulo">
+          <div class="form-group">
+            <label for="premium-editar">Módulo</label>
+            <select id="premium-editar"></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="premium-id">Identificador</label><input id="premium-id" name="id" required pattern="[a-z][a-z0-9_]{2,63}" maxlength="64" /></div>
+            <div class="form-group"><label for="premium-nome">Nome</label><input id="premium-nome" name="nome" required maxlength="120" /></div>
+            <div class="form-group"><label for="premium-versao">Versão</label><input id="premium-versao" name="versao" required maxlength="40" value="1.0.0" /></div>
+          </div>
+          <div class="form-group"><label for="premium-descricao">Descrição</label><textarea id="premium-descricao" name="descricao" maxlength="2000"></textarea></div>
+          <label style="display:block;margin-bottom:16px"><input name="ativo" type="checkbox" /> Módulo ativo</label>
+          <div id="premium-ofertas"></div>
+          <button class="btn-primary">Salvar módulo e ofertas</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Cadastrar cliente</h2></div>
+        <form id="premium-cliente">
+          <div class="form-row">
+            <div class="form-group"><label for="premium-cliente-nome">Nome</label><input id="premium-cliente-nome" name="nome" required maxlength="120" /></div>
+            <div class="form-group"><label for="premium-cliente-email">E-mail</label><input id="premium-cliente-email" name="email" type="email" required maxlength="254" /></div>
+          </div>
+          <div class="form-group">
+            <label for="premium-busca-licenca">Buscar licença base por nome ou e-mail</label>
+            <div class="form-row"><input id="premium-busca-licenca" maxlength="254" /><button type="button" id="premium-buscar" class="btn-ghost">Buscar</button></div>
+          </div>
+          <div class="form-group"><label for="premium-licenca">Licença base opcional</label><select id="premium-licenca" name="licenca_id"><option value="">Sem vínculo</option></select></div>
+          <button class="btn-primary">Cadastrar cliente</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Conceder acesso</h2></div>
+        <form id="premium-concessao">
+          <div class="form-row">
+            <div class="form-group"><label for="premium-grant-cliente">Cliente</label><select id="premium-grant-cliente" name="cliente_id" required></select></div>
+            <div class="form-group"><label for="premium-grant-modulo">Módulo ativo</label><select id="premium-grant-modulo" name="modulo_id" required></select></div>
+            <div class="form-group"><label for="premium-grant-modelo">Oferta disponível</label><select id="premium-grant-modelo" name="modelo" required></select></div>
+          </div>
+          <div class="form-group"><label for="premium-grant-motivo">Motivo</label><input id="premium-grant-motivo" name="motivo" required maxlength="500" /></div>
+          <button class="btn-primary">Conceder acesso</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Direitos por cliente</h2><button type="button" class="btn-ghost" onclick="carregarPremium()">Atualizar</button></div>
+        <div class="form-group"><label for="premium-filtro-cliente">Filtrar por cliente</label><select id="premium-filtro-cliente"></select></div>
+        <div id="premium-direitos" style="overflow-x:auto"></div>
+        <div id="premium-historico" aria-live="polite"></div>
+      </div>
+    </section>
   </div>
 </div>
 
@@ -312,11 +372,12 @@
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function showTab(name) {
     document.querySelectorAll('.tab-btn').forEach((b, i) => {
-      const tabs = ['dashboard', 'licencas', 'gerar']
+      const tabs = ['dashboard', 'licencas', 'gerar', 'premium']
       b.classList.toggle('active', tabs[i] === name)
     })
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
     document.getElementById('tab-' + name).classList.add('active')
+    if (name === 'premium') carregarPremium()
   }
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
@@ -565,5 +626,6 @@
     checkLogin()
   }
 </script>
+<script src="/painel/premium.js"></script>
 </body>
 </html>

@@ -1,3 +1,4 @@
+import { migrarPremium } from './premium-db.js'
 import { createClient, type Client } from '@libsql/client'
 
 let _db: Client | null = null
@@ -62,6 +63,7 @@ export async function initDb(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS idx_pagamentos_mp ON pagamentos(mp_pagamento_id);
   `)
+  await migrarPremium(db)
 }
 
 // Helpers com tipos flexíveis
