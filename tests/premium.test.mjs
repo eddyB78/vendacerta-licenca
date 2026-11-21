@@ -88,7 +88,15 @@ test('gestão premium no servidor existente com banco de desenvolvimento', async
     db.close()
   }
   const catalogo = await premium('/modulos')
-  const [modulo] = catalogo.modulos
+  const planejados = ['estoque_avancado', 'integracao_ecommerce', 'multi_lojas', 'inventario_mobile', 'dashboard_online']
+  const modulo = catalogo.modulos.find(m => m.id === 'importacao_internacional')
+  assert.equal(catalogo.modulos.length, planejados.length + 1)
+  for (const id of planejados) {
+    const planejado = catalogo.modulos.find(m => m.id === id)
+    assert.equal(planejado?.ativo, 0)
+    assert(planejado.descricao)
+    assert(!catalogo.ofertas.some(oferta => oferta.modulo_id === id))
+  }
   assert.equal(modulo.id, 'importacao_internacional')
   assert.equal(modulo.ativo, 0)
   assert.equal(catalogo.ofertas.length, 3)
@@ -195,10 +203,20 @@ test('gestão premium no servidor existente com banco de desenvolvimento', async
   }
   assert.equal((await direitos()).find(d => d.id === anual.id).situacao, 'expirado')
 
+  const dbReinicio = createClient({ url })
+  try {
+    await dbReinicio.execute("UPDATE modulos_premium SET descricao='Descrição revisada pelo administrador' WHERE id='estoque_avancado'")
+  } finally {
+    dbReinicio.close()
+  }
   await parar(servidor)
   await iniciar()
   const depois = await premium('/modulos')
-  assert.equal(depois.modulos[0].versao, '1.1.0')
+  assert.equal(depois.modulos.find(m => m.id === modulo.id).versao, '1.1.0')
+  assert.equal(depois.modulos.length, catalogo.modulos.length)
+  assert.equal(depois.modulos.find(m => m.id === 'estoque_avancado').descricao, 'Descrição revisada pelo administrador')
+  assert(depois.modulos.filter(m => planejados.includes(m.id)).every(m => m.ativo === 0))
+  assert.equal(depois.ofertas.length, 3)
   assert(depois.ofertas.every(oferta => oferta.moeda === 'EUR'))
   assert.equal((await direitos()).length, 3)
 
