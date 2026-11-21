@@ -5,6 +5,8 @@ import { getDb, dbRun, dbGet } from '../db.js'
 import { assinarToken, verificarToken } from '../utils/jwt.js'
 import { validarFormatoChave } from '../utils/chave.js'
 
+import { emitirAutorizacaoPremium } from '../premium-licenca.js'
+
 const router = Router()
 
 // ── POST /licenca/ativar ────────────────────────────────────────────────────
@@ -44,10 +46,17 @@ router.post('/ativar', async (req: Request, res: Response) => {
     }
 
     if (!licenca.hardware_id) {
-      await dbRun(db,
-        `UPDATE licencas SET hardware_id=?, status='ativa', ativado_em=datetime('now'), atualizado_em=datetime('now') WHERE id=?`,
+      const vinculo = await dbRun(db,
+        `UPDATE licencas SET hardware_id=?, status='ativa', ativado_em=datetime('now'), atualizado_em=datetime('now')
+         WHERE id=? AND hardware_id IS NULL AND status NOT IN ('revogada', 'inativa')`,
         hardware_id, licenca.id
       )
+      if (vinculo.rowsAffected === 0) {
+        const atual = await dbGet(db, 'SELECT hardware_id, status FROM licencas WHERE id=?', licenca.id)
+        if (atual?.hardware_id !== hardware_id || atual.status !== 'ativa') {
+          res.status(403).json({ ok: false, erro: 'Chave indisponível para este dispositivo.' }); return
+        }
+      }
     }
 
     const token = await assinarToken({
@@ -59,7 +68,9 @@ router.post('/ativar', async (req: Request, res: Response) => {
       uuidv4(), licenca.id, hardware_id, req.ip ?? ''
     )
 
-    res.json({ ok: true, token, plano: licenca.plano, expira_em: licenca.expira_em })
+    const premium = req.body.premium_v === 1
+      ? { premium: await emitirAutorizacaoPremium(db, chave, hardware_id) } : {}
+    res.json({ ok: true, token, plano: licenca.plano, expira_em: licenca.expira_em, ...premium })
   } catch (err) {
     console.error('[/ativar]', err)
     res.status(500).json({ ok: false, erro: 'Erro interno do servidor.' })
@@ -104,7 +115,9 @@ router.post('/verificar', async (req: Request, res: Response) => {
       uuidv4(), licenca.id, hardware_id ?? '', req.ip ?? ''
     )
 
-    res.json({ ok: true, status: 'ativa', plano: licenca.plano, expira_em: licenca.expira_em, token: novoToken })
+    const premium = req.body.premium_v === 1
+      ? { premium: await emitirAutorizacaoPremium(db, String(licenca.chave), hardware_id ?? '') } : {}
+    res.json({ ok: true, status: 'ativa', plano: licenca.plano, expira_em: licenca.expira_em, token: novoToken, ...premium })
   } catch (err) {
     console.error('[/verificar]', err)
     res.status(500).json({ ok: false, erro: 'Erro interno do servidor.' })

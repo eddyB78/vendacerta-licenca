@@ -1,3 +1,4 @@
+import { createHash, generateKeyPairSync, verify } from 'node:crypto'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -21,12 +22,13 @@ test('gestão premium no servidor existente com banco de desenvolvimento', async
   const pasta = await mkdtemp(join(tmpdir(), 'vendacerta-premium-'))
   const url = pathToFileURL(join(pasta, 'dev.db')).href
   const token = 'admin-local-teste'
+  const assinatura = generateKeyPairSync('ed25519')
   const port = await portaLivre()
   const origem = 'http://127.0.0.1:' + port
   const processos = new Set()
   t.after(async () => {
     await Promise.all([...processos].map(parar))
-    await rm(pasta, { recursive: true, force: true })
+    await rm(pasta, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 })
   })
 
   async function iniciar() {
@@ -37,6 +39,7 @@ test('gestão premium no servidor existente com banco de desenvolvimento', async
         TURSO_URL: url,
         TURSO_TOKEN: '',
         ADMIN_TOKEN: token,
+        PREMIUM_PRIVATE_KEY: assinatura.privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64url'),
         JWT_SECRET: 'segredo-local-de-teste-com-32-caracteres',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -79,7 +82,8 @@ test('gestão premium no servidor existente com banco de desenvolvimento', async
   try {
     await db.execute(`INSERT INTO licencas (id, chave, plano, email, status)
       VALUES ('base', 'VCRT-ABCD-EFGH-JKLM', 'vitalicio', 'loja@example.test', 'pendente'),
-             ('descartavel', 'VCRT-MNOP-QRST-UVWX', 'vitalicio', NULL, 'revogada')`)
+             ('descartavel', 'VCRT-MNOP-QRST-UVWX', 'vitalicio', NULL, 'revogada'),
+             ('legada', 'VCRT-WXYZ-ABCD-EFGH', 'vitalicio', NULL, 'ativa')`)
   } finally {
     db.close()
   }
@@ -149,6 +153,7 @@ test('gestão premium no servidor existente com banco de desenvolvimento', async
 
   const ativacao = await chamar('/licenca/ativar', 'POST', { chave: 'VCRT-ABCD-EFGH-JKLM', hardware_id: 'dev' })
   assert.equal(ativacao.status, 200)
+  assert.equal(Object.hasOwn(ativacao, 'premium'), false)
   assert.equal((await chamar('/licenca/verificar', 'POST', {
     chave: 'VCRT-ABCD-EFGH-JKLM', hardware_id: 'dev',
   }, ativacao.token)).status, 200)
@@ -162,8 +167,21 @@ test('gestão premium no servidor existente com banco de desenvolvimento', async
   assert.equal((await editar({
     ...edicao, ofertas: edicao.ofertas.map(oferta => ({ ...oferta, disponivel: true })),
   })).status, 200)
-  const anual = await premium('/direitos', 'POST', { ...concessao, cliente_id: outro.id, modelo: 'anual' })
-  assert.equal(anual.status, 201)
+  const candidatas = (await premium('/clientes')).licencas_disponiveis
+  assert.deepEqual(candidatas.map(l => l.id), ['legada'])
+  assert(!Object.hasOwn(candidatas[0], 'chave'))
+  const { cliente_id: _cliente, ...baseLegada } = concessao
+  const dadosLegada = { ...baseLegada, licenca_id: 'legada', modelo: 'anual' }
+  assert.equal((await premium('/direitos', 'POST', { ...dadosLegada, modulo_id: 'inexistente' })).status, 409)
+  assert.equal((await premium('/clientes')).clientes.some(c => c.licenca_id === 'legada'), false)
+  const tentativasLegadas = await Promise.all([
+    premium('/direitos', 'POST', dadosLegada), premium('/direitos', 'POST', dadosLegada),
+  ])
+  assert.deepEqual(tentativasLegadas.map(d => d.status).sort(), [201, 409])
+  const anual = tentativasLegadas.find(d => d.status === 201)
+  const cadastroLegado = await premium('/clientes')
+  assert.equal(cadastroLegado.clientes.filter(c => c.licenca_id === 'legada').length, 1)
+  assert.equal(cadastroLegado.licencas_disponiveis.length, 0)
   const direitoAnual = (await direitos()).find(d => d.id === anual.id)
   assert.equal(new Date(direitoAnual.expira_em).getUTCFullYear(), new Date(direitoAnual.inicio_em).getUTCFullYear() + 1)
   const seed = createClient({ url })
@@ -183,4 +201,56 @@ test('gestão premium no servidor existente com banco de desenvolvimento', async
   assert.equal(depois.modulos[0].versao, '1.1.0')
   assert(depois.ofertas.every(oferta => oferta.moeda === 'EUR'))
   assert.equal((await direitos()).length, 3)
+
+  // Cliente piloto reproduzido em SQLite temporário, com chave e instalação sintéticas.
+  const chavePiloto = 'VCRT-TEST-PILO-TXYZ'
+  const chaveSemModulo = 'VCRT-TEST-BASE-TXYZ'
+  const dataPiloto = '2026-12-21T20:23:58.000Z'
+  const fimPiloto = Date.parse(dataPiloto) > Date.now() + 60_000
+    ? dataPiloto : new Date(Date.now() + 86_400_000).toISOString()
+  const dev = createClient({ url })
+  try {
+    await dev.batch([
+      { sql: "INSERT INTO licencas(id,chave,plano,nome) VALUES ('piloto',?,'vitalicio','eddy test'), ('sem-modulo',?,'vitalicio','Somente PDV')", args: [chavePiloto, chaveSemModulo] },
+      { sql: "INSERT INTO clientes_premium(id,nome,email,licenca_id) VALUES ('cliente-piloto','eddy test','','piloto')", args: [] },
+      {
+        sql: `INSERT INTO direitos_premium(id,cliente_id,modulo_id,modelo,status,inicio_em,expira_em,preco_centavos,moeda)
+          VALUES ('direito-piloto','cliente-piloto',?,'mensal','ativo',?,?,999,'BRL')`,
+        args: [modulo.id, new Date().toISOString(), fimPiloto],
+      },
+    ], 'write')
+
+    function verificarComprovante(prova) {
+      const [payload, assinaturaToken] = prova.split('.')
+      assert(verify(null, Buffer.from(payload), assinatura.publicKey, Buffer.from(assinaturaToken, 'base64url')))
+      return JSON.parse(Buffer.from(payload, 'base64url'))
+    }
+
+    const pedidoPiloto = { chave: chavePiloto, hardware_id: 'instalacao-piloto', premium_v: 1 }
+    const pilotoAtivado = await chamar('/licenca/ativar', 'POST', pedidoPiloto)
+    assert.equal(pilotoAtivado.status, 200)
+    const provaPiloto = verificarComprovante(pilotoAtivado.premium)
+    assert.equal(provaPiloto.cliente_id, 'cliente-piloto')
+    assert.equal(provaPiloto.licenca_id, 'piloto')
+    assert.equal(provaPiloto.instalacao, pedidoPiloto.hardware_id)
+    assert.equal(provaPiloto.licenca_hash, createHash('sha256').update(chavePiloto).digest('base64url'))
+    assert.equal(provaPiloto.exp - provaPiloto.iat, 86400)
+    assert.deepEqual(provaPiloto.modulos.map(m => m.id), [modulo.id])
+    assert(provaPiloto.modulos[0].exp <= Math.floor(Date.parse(fimPiloto) / 1000))
+
+    const semModulo = await chamar('/licenca/ativar', 'POST', {
+      chave: chaveSemModulo, hardware_id: 'instalacao-sem-modulo', premium_v: 1,
+    })
+    assert.deepEqual(verificarComprovante(semModulo.premium).modulos, [])
+    const conferirPiloto = (pedido = pedidoPiloto) => chamar('/licenca/verificar', 'POST', pedido, pilotoAtivado.token)
+    assert.equal((await conferirPiloto({ ...pedidoPiloto, hardware_id: 'outra-instalacao' })).status, 403)
+    await dev.execute("UPDATE direitos_premium SET expira_em='2000-01-01T00:00:00Z' WHERE id='direito-piloto'")
+    assert.deepEqual(verificarComprovante((await conferirPiloto()).premium).modulos, [])
+    await dev.execute({ sql: "UPDATE direitos_premium SET expira_em=?, status='revogado' WHERE id='direito-piloto'", args: [fimPiloto] })
+    assert.deepEqual(verificarComprovante((await conferirPiloto()).premium).modulos, [])
+    await dev.execute("UPDATE licencas SET expira_em='2000-01-01T00:00:00Z' WHERE id='piloto'")
+    assert.equal((await conferirPiloto()).status, 403)
+  } finally {
+    dev.close()
+  }
 })

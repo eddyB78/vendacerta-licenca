@@ -97,7 +97,12 @@ async function carregarPremium() {
     premiumOpcoes(premiumCampo('editar'), premiumModulos.map(m => [m.id, m.nome]), 'Novo módulo')
     premiumEditar()
     const clientes = premiumClientes.map(c => [c.id, c.nome + ' · ' + c.email + (c.licenca_id ? ' · Licença vinculada' : '')])
-    premiumOpcoes(premiumCampo('grant-cliente'), clientes, 'Selecione o cliente')
+    const licencas = (cadastro.licencas_disponiveis ?? []).map(licenca => [
+      'licenca:' + licenca.id,
+      [licenca.nome || licenca.email || 'Licença ' + licenca.id, licenca.nome && licenca.email, 'Licença existente']
+        .filter(Boolean).join(' · '),
+    ])
+    premiumOpcoes(premiumCampo('grant-cliente'), [...clientes, ...licencas], 'Selecione o cliente')
     premiumOpcoes(premiumCampo('filtro-cliente'), clientes, 'Todos os clientes')
     premiumOpcoes(premiumCampo('grant-modulo'), premiumModulos.filter(m => m.ativo).map(m => [m.id, m.nome]), 'Selecione o módulo')
     premiumOfertasDisponiveis()
@@ -234,10 +239,14 @@ premiumFormulario(premiumCampo('cliente'), async dados => {
 })
 
 premiumFormulario(premiumCampo('concessao'), async dados => {
-  await premiumApi('/direitos', 'POST', Object.fromEntries(dados))
+  const { cliente_id, ...concessao } = Object.fromEntries(dados)
+  const destinatario = cliente_id.startsWith('licenca:')
+    ? { licenca_id: cliente_id.slice('licenca:'.length) }
+    : { cliente_id }
+  await premiumApi('/direitos', 'POST', { ...concessao, ...destinatario })
   premiumCampo('grant-motivo').value = ''
   showToast('Acesso concedido.')
-  await premiumCarregarDireitos()
+  await carregarPremium()
 })
 
 premiumCampo('editar').addEventListener('change', premiumEditar)
