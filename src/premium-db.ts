@@ -1,5 +1,18 @@
 import type { Client } from '@libsql/client'
 
+const modulosPlanejados = [
+  ['estoque_avancado', 'Gestão Avançada de Estoque',
+    'Inventários completos e parciais, alertas de ruptura, histórico detalhado de movimentações e controle de perdas e divergências.'],
+  ['integracao_ecommerce', 'Integração E-commerce',
+    'Sincronização de produtos, preços e estoque, importação de pedidos de lojas virtuais, controle de disponibilidade e prevenção de vendas duplicadas.'],
+  ['multi_lojas', 'Multi-lojas',
+    'Gerenciamento de várias lojas, estoque por filial, transferências entre unidades e painel central de gerenciamento.'],
+  ['inventario_mobile', 'Aplicativo de Inventário',
+    'Contagem pelo celular, leitura de códigos de barras e sincronização segura com o VendaCerta PDV. Compatibilidade com coletores Zebra planejada.'],
+  ['dashboard_online', 'Dashboard Online',
+    'Acompanhamento remoto das vendas, relatórios de faturamento, indicadores de desempenho e informações de estoque.'],
+] as const
+
 export async function migrarPremium(db: Client): Promise<void> {
   await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS modulos_premium (
@@ -60,6 +73,12 @@ export async function migrarPremium(db: Client): Promise<void> {
   `)
 
   await db.batch([
+    ...modulosPlanejados.map(([id, nome, descricao]) => ({
+      sql: `INSERT INTO modulos_premium (id, nome, descricao, versao, ativo)
+            VALUES (?, ?, ?, '1.0.0', 0)
+            ON CONFLICT(id) DO NOTHING`,
+      args: [id, nome, descricao],
+    })),
     {
       sql: `INSERT INTO modulos_premium (id, nome, descricao, versao, ativo)
             VALUES ('importacao_internacional', 'Importação Internacional',

@@ -94,7 +94,10 @@ async function carregarPremium() {
     premiumModulos = catalogo.modulos
     premiumOfertas = catalogo.ofertas
     premiumClientes = cadastro.clientes
-    premiumOpcoes(premiumCampo('editar'), premiumModulos.map(m => [m.id, m.nome]), 'Novo módulo')
+    premiumOpcoes(premiumCampo('editar'), premiumModulos.map(m => {
+      const disponivel = m.ativo && premiumOfertas.some(oferta => oferta.modulo_id === m.id && oferta.disponivel)
+      return [m.id, disponivel ? m.nome : m.nome + ' · Indisponível para contratação']
+    }), 'Novo módulo')
     premiumEditar()
     const clientes = premiumClientes.map(c => [c.id, c.nome + ' · ' + c.email + (c.licenca_id ? ' · Licença vinculada' : '')])
     const licencas = (cadastro.licencas_disponiveis ?? []).map(licenca => [
