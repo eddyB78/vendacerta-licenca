@@ -1,6 +1,7 @@
 import { createHash, createPrivateKey, sign } from 'node:crypto'
 import type { Client } from '@libsql/client'
 import { dbAll, dbGet } from './db.js'
+import { modulosDoPacote, pacotePremiumId } from './premium-db.js'
 
 const validadeOffline = 24 * 60 * 60
 
@@ -29,11 +30,18 @@ export async function emitirAutorizacaoPremium(db: Client, chave: string, instal
         AND (d.expira_em IS NULL OR julianday(d.expira_em) > julianday('now'))
       ORDER BY d.modulo_id
     `, licenca.cliente_id) : []
-    const modulos = direitos.map(direito => ({
-      id: String(direito.modulo_id),
-      exp: direito.expira_em === null ? exp
-        : Math.min(exp, Math.floor(Date.parse(String(direito.expira_em)) / 1000)),
-    })).filter(modulo => modulo.exp > agora)
+    const validadePorModulo = new Map<string, number>()
+    for (const direito of direitos) {
+      const id = String(direito.modulo_id)
+      const fim = direito.expira_em === null ? exp
+        : Math.min(exp, Math.floor(Date.parse(String(direito.expira_em)) / 1000))
+      if (!(fim > agora)) continue
+      const incluidos = id === pacotePremiumId ? [id, ...modulosDoPacote] : [id]
+      for (const modulo of incluidos) {
+        validadePorModulo.set(modulo, Math.max(fim, validadePorModulo.get(modulo) ?? 0))
+      }
+    }
+    const modulos = [...validadePorModulo].map(([id, exp]) => ({ id, exp }))
 
     const payload = Buffer.from(JSON.stringify({
       v: 1, aud: 'vendacerta-pdv-premium', iat: agora, exp,

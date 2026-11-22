@@ -12,6 +12,8 @@ const modulosPlanejados = [
   ['dashboard_online', 'Dashboard Online',
     'Acompanhamento remoto das vendas, relatórios de faturamento, indicadores de desempenho e informações de estoque.'],
 ] as const
+export const pacotePremiumId = 'pacote_premium'
+export const modulosDoPacote = modulosPlanejados.map(([id]) => id)
 
 export async function migrarPremium(db: Client): Promise<void> {
   await db.executeMultiple(`
@@ -73,6 +75,13 @@ export async function migrarPremium(db: Client): Promise<void> {
   `)
 
   await db.batch([
+    {
+      sql: `INSERT INTO modulos_premium (id, nome, descricao, versao, ativo)
+            VALUES (?, 'Pacote Premium VendaCerta',
+                    'Inclui Estoque Avançado, E-commerce, Multi-lojas, Inventário Mobile e Dashboard Online.',
+                    '1.0.0', 0) ON CONFLICT(id) DO NOTHING`,
+      args: [pacotePremiumId],
+    },
     ...modulosPlanejados.map(([id, nome, descricao]) => ({
       sql: `INSERT INTO modulos_premium (id, nome, descricao, versao, ativo)
             VALUES (?, ?, ?, '1.0.0', 0)
@@ -86,10 +95,10 @@ export async function migrarPremium(db: Client): Promise<void> {
             ON CONFLICT(id) DO NOTHING`,
       args: [],
     },
-    ...['mensal', 'anual', 'permanente'].map(modelo => ({
-      sql: `INSERT INTO ofertas_premium VALUES ('importacao_internacional', ?, 0, 'BRL', 0)
+    ...[pacotePremiumId, 'importacao_internacional'].flatMap(id => ['mensal', 'anual', 'permanente'].map(modelo => ({
+      sql: `INSERT INTO ofertas_premium VALUES (?, ?, 0, 'BRL', 0)
             ON CONFLICT(modulo_id, modelo) DO NOTHING`,
-      args: [modelo],
-    })),
+      args: [id, modelo],
+    }))),
   ], 'write')
 }
